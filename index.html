@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NETRA — Citywide Vehicle Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0e14;
+    --bg-1:#0d1219;
+    --panel:#111823;
+    --panel-2:#141d29;
+    --border:#22303f;
+    --border-soft:#1a2531;
+    --text:#e8eef5;
+    --text-dim:#8b9bad;
+    --text-faint:#556front;
+    --text-faint2:#546578;
+    --cyan:#3fd7c9;
+    --cyan-dim:#1c4b47;
+    --amber:#f2a93b;
+    --amber-dim:#4a3616;
+    --red:#ef5b4e;
+    --red-dim:#4a1e1a;
+    --green:#4ecb8d;
+    --green-dim:#173a2b;
+    --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);height:100%;}
+  body{overflow:hidden;font-size:14px;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---------- Boot overlay ---------- */
+  #boot{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .6s ease, visibility .6s;}
+  #boot.hide{opacity:0;visibility:hidden;pointer-events:none;}
+  #boot .mark{display:flex;align-items:center;gap:12px;}
+  #boot .mark svg{width:34px;height:34px;}
+  #boot .mark span{font-family:var(--mono);font-size:22px;letter-spacing:3px;font-weight:600;color:var(--text);}
+  #boot .status{font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;}
+  #boot .bar{width:280px;height:2px;background:var(--border-soft);border-radius:2px;overflow:hidden;}
+  #boot .bar i{display:block;height:100%;width:0%;background:var(--cyan);animation:fillbar 1.4s ease forwards;}
+  @keyframes fillbar{to{width:100%;}}
+
+  /* ---------- Top bar ---------- */
+  header{
+    height:56px;flex:0 0 56px;display:flex;align-items:center;gap:20px;
+    padding:0 18px;border-bottom:1px solid var(--border);background:var(--bg-1);
+    -webkit-app-region: drag;
+  }
+  .brand{display:flex;align-items:center;gap:9px;}
+  .brand svg{width:22px;height:22px;flex:none;}
+  .brand b{font-size:16px;letter-spacing:2px;font-weight:700;}
+  .brand small{display:block;font-size:10px;color:var(--text-faint2);font-weight:500;letter-spacing:.5px;margin-top:1px;}
+  .loc{display:flex;flex-direction:column;line-height:1.25;padding-left:16px;border-left:1px solid var(--border);}
+  .loc b{font-size:12.5px;font-weight:600;}
+  .loc span{font-size:11px;color:var(--text-dim);}
+  .spacer{flex:1;}
+  .chip{
+    display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--text-dim);
+    background:var(--panel);border:1px solid var(--border);padding:6px 11px;border-radius:5px;letter-spacing:.3px;
+  }
+  .chip b{color:var(--text);font-weight:600;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);flex:none;}
+  .dot.pulse{animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .clock{font-family:var(--mono);font-size:13px;color:var(--text);min-width:76px;text-align:right;letter-spacing:.5px;}
+
+  /* ---------- Layout ---------- */
+  .body{flex:1;display:flex;min-height:0;}
+  nav{
+    flex:0 0 62px;background:var(--bg-1);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px;
+  }
+  nav button{
+    width:44px;height:44px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-faint2);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:background .15s,color .15s;
+  }
+  nav button svg{width:19px;height:19px;}
+  nav button:hover{background:var(--panel);color:var(--text-dim);}
+  nav button.active{background:var(--cyan-dim);color:var(--cyan);border-color:#204b46;}
+  nav button .badge{
+    position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-family:var(--mono);font-size:9px;
+    min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;font-weight:600;
+  }
+  nav .navlabel{
+    position:absolute;left:60px;background:#1a2431;border:1px solid var(--border);padding:5px 9px;border-radius:5px;
+    font-size:11px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:50;color:var(--text);
+  }
+  nav button:hover .navlabel{opacity:1;}
+
+  main{flex:1;min-width:0;display:flex;flex-direction:column;padding:18px 18px 18px 20px;overflow:hidden;}
+  .view{flex:1;min-height:0;display:none;flex-direction:column;}
+  .view.active{display:flex;}
+
+  .view-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex:0 0 auto;}
+  .view-head h1{font-size:16px;font-weight:600;margin:0;}
+  .view-head p{margin:2px 0 0;font-size:12px;color:var(--text-dim);}
+  .view-head .right{font-family:var(--mono);font-size:11px;color:var(--text-faint2);}
+
+  /* ---------- Feeds grid ---------- */
+  #feed-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;overflow-y:auto;padding-right:4px;}
+  .cam-card{background:var(--panel);border:1px solid var(--border);border-radius:9px;overflow:hidden;display:flex;flex-direction:column;}
+  .cam-card canvas{width:100%;display:block;background:#060a0f;aspect-ratio:16/9;}
+  .cam-meta{display:flex;align-items:center;justify-content:space-between;padding:8px 11px;border-top:1px solid var(--border-soft);}
+  .cam-meta .n{font-size:12px;font-weight:600;}
+  .cam-meta .z{font-size:10.5px;color:var(--text-dim);margin-top:1px;}
+  .cam-meta .stat{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--green);}
+
+  /* ---------- Sidebar (persistent) ---------- */
+  aside{
+    flex:0 0 318px;border-left:1px solid var(--border);background:var(--bg-1);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .side-block{border-bottom:1px solid var(--border);padding:14px 16px;}
+  .side-block h2{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint2);margin:0 0 10px;font-weight:600;}
+  .mini-alert{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--border-soft);}
+  .mini-alert:last-child{border-bottom:none;}
+  .mini-alert .sev{width:7px;height:7px;border-radius:50%;margin-top:5px;flex:none;}
+  .mini-alert .sev.crit{background:var(--red);box-shadow:0 0 6px var(--red);}
+  .mini-alert .sev.warn{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+  .mini-alert .t{font-size:12px;line-height:1.4;}
+  .mini-alert .t b{font-family:var(--mono);}
+  .mini-alert .t span{display:block;color:var(--text-faint2);font-size:10.5px;margin-top:1px;}
+
+  #ticker-wrap{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 0 0;}
+  #ticker-wrap h2{padding:0 16px;}
+  #ticker{flex:1;overflow-y:auto;padding:0 16px 16px;}
+  .tick-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-soft);animation:fadein .35s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+  .tick-row .plate{font-family:var(--mono);font-size:12.5px;font-weight:600;background:#fff;color:#111;border-radius:3px;padding:2px 6px;letter-spacing:.5px;flex:none;}
+  .tick-row .plate.watch{background:var(--red);color:#fff;}
+  .tick-row .meta{min-width:0;}
+  .tick-row .meta .l1{font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tick-row .meta .l2{font-size:10px;color:var(--text-faint2);font-family:var(--mono);}
+
+  /* ---------- Map view ---------- */
+  #map-wrap{display:flex;gap:16px;flex:1;min-height:0;}
+  #map-canvas-holder{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:9px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  #map-canvas{width:100%;height:100%;}
+  #route-log{flex:0 0 300px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:14px 16px;overflow-y:auto;}
+  #route-log h2{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint2);margin:0 0 10px;font-weight:600;}
+  .route-item{padding:10px 0;border-bottom:1px solid var(--border-soft);font-size:12px;}
+  .route-item .p{font-family:var(--mono);font-weight:600;color:var(--cyan);}
+  .route-item .path{color:var(--text-dim);margin-top:4px;line-height:1.5;font-size:11px;}
+  .route-item .dur{color:var(--text-faint2);font-family:var(--mono);font-size:10.5px;margin-top:3px;}
+
+  /* ---------- Log table ---------- */
+  #log-tools{display:flex;gap:10px;margin-bottom:12px;flex:0 0 auto;}
+  #log-search{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);
+    font-family:var(--mono);font-size:12px;width:240px;outline:none;
+  }
+  #log-search::placeholder{color:var(--text-faint2);}
+  .table-wrap{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:9px;background:var(--panel);}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{
+    position:sticky;top:0;background:var(--panel-2);text-align:left;padding:10px 14px;font-weight:600;
+    color:var(--text-faint2);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);z-index:1;
+  }
+  tbody td{padding:9px 14px;border-bottom:1px solid var(--border-soft);color:var(--text-dim);}
+  tbody tr:hover{background:var(--panel-2);}
+  td.plate-cell span{font-family:var(--mono);background:#fff;color:#111;padding:2px 7px;border-radius:3px;font-weight:600;font-size:11.5px;}
+  td.plate-cell span.watch{background:var(--red);color:#fff;}
+  td.conf b{color:var(--text);}
+  .flag-ok{color:var(--text-faint2);}
+  .flag-bad{color:var(--red);font-weight:600;}
+
+  /* ---------- Alerts view ---------- */
+  #alerts-list{overflow-y:auto;display:flex;flex-direction:column;gap:9px;}
+  .alert-card{display:flex;gap:12px;padding:13px 15px;border-radius:9px;border:1px solid var(--border);background:var(--panel);align-items:flex-start;}
+  .alert-card.crit{border-color:#4a2420;background:linear-gradient(90deg,var(--red-dim),var(--panel) 22%);}
+  .alert-card.warn{border-color:#4a3a1c;background:linear-gradient(90deg,var(--amber-dim),var(--panel) 22%);}
+  .alert-card .ic{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .alert-card.crit .ic{background:var(--red-dim);color:var(--red);}
+  .alert-card.warn .ic{background:var(--amber-dim);color:var(--amber);}
+  .alert-card .ic svg{width:17px;height:17px;}
+  .alert-card .body{flex:1;min-width:0;}
+  .alert-card .row1{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .alert-card .row1 .kind{font-weight:600;font-size:13px;}
+  .alert-card.crit .row1 .kind{color:var(--red);}
+  .alert-card.warn .row1 .kind{color:var(--amber);}
+  .alert-card .row1 .plate{font-family:var(--mono);background:#fff;color:#111;padding:1px 7px;border-radius:3px;font-size:12px;font-weight:600;}
+  .alert-card .desc{font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.5;}
+  .alert-card .meta{font-size:10.5px;color:var(--text-faint2);font-family:var(--mono);margin-top:5px;}
+  #alerts-empty{color:var(--text-faint2);font-size:13px;padding:40px 0;text-align:center;}
+
+  /* ---------- Analytics ---------- */
+  #analytics-view .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;flex:0 0 auto;}
+  .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:14px 16px;}
+  .stat-card .v{font-family:var(--mono);font-size:24px;font-weight:600;}
+  .stat-card .l{font-size:11px;color:var(--text-dim);margin-top:4px;}
+  #analytics-charts{flex:1;min-height:0;display:grid;grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr;gap:14px;}
+  .chart-card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:14px 16px;display:flex;flex-direction:column;min-height:0;}
+  .chart-card h3{font-size:11.5px;font-weight:600;color:var(--text-dim);margin:0 0 8px;text-transform:none;}
+  .chart-card .holder{flex:1;position:relative;min-height:0;}
+  .chart-card.span2{grid-row:span 2;}
+
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:#233042;border-radius:5px;}
+  ::-webkit-scrollbar-thumb:hover{background:#2d3d52;}
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="mark">
+    <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#3fd7c9" stroke-width="1.4"/><circle cx="16" cy="16" r="5.5" fill="#3fd7c9"/><path d="M2 16h6M24 16h6M16 2v6M16 24v6" stroke="#3fd7c9" stroke-width="1.2"/></svg>
+    <span>NETRA</span>
+  </div>
+  <div class="status" id="boot-status">CONNECTING TO CAMERA MESH…</div>
+  <div class="bar"><i></i></div>
+</div>
+
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#3fd7c9" stroke-width="1.4"/><circle cx="16" cy="16" r="5.5" fill="#3fd7c9"/><path d="M2 16h6M24 16h6M16 2v6M16 24v6" stroke="#3fd7c9" stroke-width="1.2"/></svg>
+      <div>
+        <b>NETRA</b>
+        <small>Citywide vehicle intelligence</small>
+      </div>
+    </div>
+    <div class="loc">
+      <b>Hyderabad Urban Grid</b>
+      <span>Telangana Traffic &amp; Urban Management</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="chip"><span class="dot pulse"></span>ANPR engine active</div>
+    <div class="chip" id="chip-cams"><b>8 / 8</b>&nbsp;cameras online</div>
+    <div class="chip" id="chip-latency">Latency&nbsp;<b>38ms</b></div>
+    <div class="clock" id="clock">--:--:--</div>
+  </header>
+
+  <div class="body">
+    <nav id="nav">
+      <button data-view="feeds" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></svg>
+        <span class="navlabel">Live feeds</span>
+      </button>
+      <button data-view="map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>
+        <span class="navlabel">Trajectory map</span>
+      </button>
+      <button data-view="log">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span class="navlabel">ANPR log</span>
+      </button>
+      <button data-view="alerts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3a6 6 0 0 0-6 6v4l-2 4h16l-2-4V9a6 6 0 0 0-6-6Z"/><path d="M9.5 20a2.5 2.5 0 0 0 5 0"/></svg>
+        <span class="navlabel">Alerts</span>
+        <span class="badge" id="alert-badge" style="display:none;">0</span>
+      </button>
+      <button data-view="analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M11 20V4M18 20v-7"/></svg>
+        <span class="navlabel">Analytics</span>
+      </button>
+    </nav>
+
+    <main>
+
+      <!-- FEEDS VIEW -->
+      <section class="view active" id="view-feeds">
+        <div class="view-head">
+          <div>
+            <h1>Live camera feeds</h1>
+            <p>Fixed ANPR gantries across 8 junctions · perspective detection zone active on each</p>
+          </div>
+          <div class="right" id="feeds-count">— vehicles in frame</div>
+        </div>
+        <div id="feed-grid"></div>
+      </section>
+
+      <!-- MAP VIEW -->
+      <section class="view" id="view-map">
+        <div class="view-head">
+          <div>
+            <h1>Multi-camera trajectory reconstruction</h1>
+            <p>Vehicle paths stitched across the camera mesh as plates are re-observed downstream</p>
+          </div>
+          <div class="right" id="map-active">— vehicles in transit</div>
+        </div>
+        <div id="map-wrap">
+          <div id="map-canvas-holder"><canvas id="map-canvas" width="900" height="620"></canvas></div>
+          <div id="route-log">
+            <h2>Completed routes</h2>
+            <div id="route-items"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- LOG VIEW -->
+      <section class="view" id="view-log">
+        <div class="view-head">
+          <div>
+            <h1>ANPR detection log</h1>
+            <p>Every plate read across the network, most recent first</p>
+          </div>
+          <div class="right" id="log-count">0 records</div>
+        </div>
+        <div id="log-tools">
+          <input id="log-search" type="text" placeholder="Filter by plate number…">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Time</th><th>Plate</th><th>Camera</th><th>Zone</th><th>Type</th><th>Colour</th><th>Speed</th><th>Confidence</th><th>Flag</th></tr>
+            </thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ALERTS VIEW -->
+      <section class="view" id="view-alerts">
+        <div class="view-head">
+          <div>
+            <h1>Alerts</h1>
+            <p>Watchlist matches and speed violations, generated automatically from live detections</p>
+          </div>
+          <div class="right" id="alerts-count">0 today</div>
+        </div>
+        <div id="alerts-list"><div id="alerts-empty">No alerts yet — monitoring the network…</div></div>
+      </section>
+
+      <!-- ANALYTICS VIEW -->
+      <section class="view" id="view-analytics">
+        <div class="view-head">
+          <div>
+            <h1>Network analytics</h1>
+            <p>Rolling session statistics across the camera mesh</p>
+          </div>
+          <div class="right">Session started <span id="session-start">--:--</span></div>
+        </div>
+        <div id="analytics-view" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+          <div class="stat-row">
+            <div class="stat-card"><div class="v" id="stat-total">0</div><div class="l">Detections this session</div></div>
+            <div class="stat-card"><div class="v" id="stat-active">0</div><div class="l">Vehicles currently tracked</div></div>
+            <div class="stat-card"><div class="v" id="stat-watch" style="color:var(--red)">0</div><div class="l">Watchlist matches</div></div>
+            <div class="stat-card"><div class="v" id="stat-conf">—</div><div class="l">Average read confidence</div></div>
+          </div>
+          <div id="analytics-charts">
+            <div class="chart-card span2"><h3>Detections by 5-minute interval</h3><div class="holder"><canvas id="chart-volume"></canvas></div></div>
+            <div class="chart-card"><h3>Detections by junction</h3><div class="holder"><canvas id="chart-zones"></canvas></div></div>
+            <div class="chart-card"><h3>Vehicle type mix</h3><div class="holder"><canvas id="chart-types"></canvas></div></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <aside>
+      <div class="side-block" style="flex:0 0 auto;">
+        <h2>Priority alerts</h2>
+        <div id="side-alerts"><div style="color:var(--text-faint2);font-size:12px;">None yet</div></div>
+      </div>
+      <div id="ticker-wrap">
+        <h2>Live ANPR stream</h2>
+        <div id="ticker"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   CONFIG / STATIC DATA
+   ============================================================ */
+const CAMERAS = [
+  {id:'CAM-01', name:'Ameerpet Junction',          zone:'Ameerpet',       x:190, y:120, lanes:3, limit:60},
+  {id:'CAM-02', name:'Punjagutta Flyover',          zone:'Punjagutta',     x:360, y:190, lanes:2, limit:70},
+  {id:'CAM-03', name:'Banjara Hills Road No.12',    zone:'Banjara Hills',  x:540, y:130, lanes:2, limit:50},
+  {id:'CAM-04', name:'Jubilee Hills Check Post',    zone:'Jubilee Hills',  x:660, y:290, lanes:3, limit:60},
+  {id:'CAM-05', name:'Madhapur Cyber Towers',       zone:'Madhapur',       x:760, y:410, lanes:3, limit:60},
+  {id:'CAM-06', name:'Gachibowli ORR Entry',        zone:'Gachibowli',     x:820, y:540, lanes:4, limit:80},
+  {id:'CAM-07', name:'Mehdipatnam X Roads',         zone:'Mehdipatnam',    x:270, y:430, lanes:2, limit:50},
+  {id:'CAM-08', name:'Secunderabad Clock Tower',    zone:'Secunderabad',   x:400, y:60,  limit:50, lanes:2},
+];
+const EDGES = [[0,1],[1,2],[2,3],[3,4],[4,5],[0,6],[1,6],[2,7],[0,7],[3,5]];
+const ADJ = CAMERAS.map(()=>[]);
+EDGES.forEach(([a,b])=>{ADJ[a].push(b); ADJ[b].push(a);});
+
+const VEHICLE_TYPES = [
+  {name:'Car',   w:46, h:20, weight:5},
+  {name:'SUV',   w:52, h:23, weight:2},
+  {name:'Auto',  w:28, h:24, weight:3},
+  {name:'Bike',  w:15, h:11, weight:4},
+  {name:'Bus',   w:70, h:25, weight:1},
+  {name:'Truck', w:62, h:26, weight:1},
+];
+const VEHICLE_POOL = [];
+VEHICLE_TYPES.forEach(t=>{for(let i=0;i<t.weight;i++) VEHICLE_POOL.push(t);});
+
+const COLORS = [
+  {name:'White', hex:'#e9edf1'}, {name:'Silver', hex:'#b9c2c9'}, {name:'Black', hex:'#2a2e34'},
+  {name:'Red', hex:'#b3392c'}, {name:'Blue', hex:'#2f5c9c'}, {name:'Grey', hex:'#6b727a'},
+  {name:'Maroon', hex:'#6e2f34'},
+];
+const RTO = ['07','09','10','11','12','13','20','31','04','08'];
+const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+const WATCHLIST = new Set(); // filled with a few generated plates below
+
+const DETECT_T = 0.56;     // progress at which the ANPR gate fires
+const HORIZON_T = 0.30;    // vertical fraction of canvas used as sky/horizon
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+function rand(a,b){return a+Math.random()*(b-a);}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function pad(n){return n<10?'0'+n:''+n;}
+
+function genPlate(){
+  const l1 = pick(LETTERS.split(''));
+  const l2 = pick(LETTERS.split(''));
+  const num = Math.floor(rand(1000,9999));
+  return `TS${pick(RTO)}${l1}${l2}${num}`;
+}
+// seed a small watchlist
+for(let i=0;i<3;i++) WATCHLIST.add(genPlate());
+
+function randomRoute(){
+  const hops = 2+Math.floor(rand(0,3)); // total length 2..4
+  let start = Math.floor(rand(0,CAMERAS.length));
+  let path = [start];
+  let current = start;
+  for(let i=1;i<hops;i++){
+    const opts = ADJ[current].filter(n=>path.indexOf(n)===-1);
+    if(!opts.length) break;
+    const next = pick(opts);
+    path.push(next);
+    current = next;
+  }
+  return path;
+}
+
+function fmtTime(d){
+  return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function fmtClock(){
+  const d = new Date();
+  return fmtTime(d);
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  trips: [],            // active trips (vehicles moving through the network)
+  transits: [],          // visual inter-camera transit animations for the map
+  events: [],            // ANPR log entries
+  alerts: [],            // alert entries
+  routesCompleted: [],   // finished multi-hop trajectories
+  cameraLastDetect: {},  // camId -> timestamp, for node pulse on map
+  totals: {detections:0, watchlist:0, confSum:0},
+  zoneCounts: {},
+  typeCounts: {},
+  intervalBuckets: [],   // rolling 5-min buckets for the volume chart
+  currentBucket: 0,
+  sessionStart: new Date(),
+};
+CAMERAS.forEach(c=>{state.zoneCounts[c.zone]=0;});
+VEHICLE_TYPES.forEach(t=>{state.typeCounts[t.name]=0;});
+
+// seed the volume chart with a plausible daily traffic curve (12 bars of "5-min" buckets)
+(function seedBuckets(){
+  const curve = [8,14,22,35,52,68,61,44,33,40,55,30];
+  state.intervalBuckets = curve.map(v=>v+Math.floor(rand(-4,4)));
+})();
+
+/* ============================================================
+   TRIP / SIMULATION ENGINE
+   ============================================================ */
+CAMERAS.forEach(c=>{c.active=[];}); // active vehicle-render objects per camera
+
+function spawnTrip(){
+  if(state.trips.length>=16) return;
+  const route = randomRoute();
+  if(route.length<2 && Math.random()<0.7) return; // mostly prefer multi-hop
+  const type = pick(VEHICLE_POOL);
+  const color = pick(COLORS);
+  const watch = Math.random()<0.06;
+  const plate = watch ? pick(Array.from(WATCHLIST)) : genPlate();
+  const trip = {
+    id: 't'+Math.random().toString(36).slice(2,9),
+    plate, type, color,
+    speedKmph: Math.round(rand(32,92)),
+    route, legIndex:0,
+    state:'in-camera',
+    startedAt: Date.now(),
+  };
+  state.trips.push(trip);
+  enterCamera(trip, route[0]);
+}
+
+function enterCamera(trip, camIdx){
+  trip.camera = camIdx;
+  trip.state = 'in-camera';
+  const cam = CAMERAS[camIdx];
+  const v = {
+    trip, t:-0.04-Math.random()*0.1,
+    lane: Math.floor(rand(0,cam.lanes)),
+    jitter: rand(-0.15,0.15),
+    duration: rand(4.2,7.2),
+    detected:false,
+  };
+  cam.active.push(v);
+}
+
+function onDetect(trip, cam){
+  const now = new Date();
+  const overspeed = trip.speedKmph > cam.limit;
+  const isWatch = WATCHLIST.has(trip.plate);
+  const confidence = Math.round(rand(90,99.4)*10)/10;
+
+  // log event
+  const ev = {
+    time: fmtTime(now), ts: Date.now(),
+    plate: trip.plate, camera: cam.id, zone: cam.zone,
+    type: trip.type.name, color: trip.color.name,
+    speed: trip.speedKmph, confidence, flag: isWatch,
+  };
+  state.events.unshift(ev);
+  if(state.events.length>250) state.events.pop();
+
+  state.totals.detections++;
+  state.totals.confSum += confidence;
+  state.zoneCounts[cam.zone] = (state.zoneCounts[cam.zone]||0)+1;
+  state.typeCounts[trip.type.name] = (state.typeCounts[trip.type.name]||0)+1;
+  state.intervalBuckets[state.intervalBuckets.length-1]++;
+
+  state.cameraLastDetect[cam.id] = Date.now();
+  pushTickerRow(ev);
+  appendLogRow(ev);
+
+  if(isWatch){
+    state.totals.watchlist++;
+    pushAlert({
+      severity:'crit', kind:'Watchlist match', plate:trip.plate, camera:cam.id, zone:cam.zone,
+      desc:`Plate is present on the active watchlist. Flagged at ${cam.name}.`, time: fmtTime(now),
+    });
+  } else if(overspeed){
+    pushAlert({
+      severity:'warn', kind:'Overspeed violation', plate:trip.plate, camera:cam.id, zone:cam.zone,
+      desc:`Recorded at ${trip.speedKmph} km/h against a posted limit of ${cam.limit} km/h.`, time: fmtTime(now),
+    });
+  }
+}
+
+function leaveCamera(trip){
+  const cam = CAMERAS[trip.camera];
+  cam.active = cam.active.filter(v=>v.trip!==trip);
+
+  if(trip.legIndex+1 < trip.route.length){
+    const fromIdx = trip.camera;
+    const toIdx = trip.route[trip.legIndex+1];
+    const duration = rand(2600,6200);
+    state.transits.push({
+      from: fromIdx, to: toIdx, plate: trip.plate, color: trip.color.hex,
+      start: Date.now(), duration, trip,
+    });
+    trip.state = 'transit';
+    trip.legIndex++;
+    trip.nextAt = Date.now()+duration;
+  } else {
+    // route complete
+    const totalMs = Date.now()-trip.startedAt;
+    state.routesCompleted.unshift({
+      plate: trip.plate, route: trip.route.slice(), durationMs: totalMs, watch: WATCHLIST.has(trip.plate),
+    });
+    if(state.routesCompleted.length>8) state.routesCompleted.pop();
+    renderRouteLog();
+    state.trips = state.trips.filter(t=>t!==trip);
+  }
+}
+
+function tickSim(dt){
+  // advance vehicles currently crossing a camera frame
+  CAMERAS.forEach(cam=>{
+    cam.active.forEach(v=>{
+      v.t += dt/v.duration;
+      if(!v.detected && v.t>=DETECT_T){
+        v.detected = true;
+        onDetect(v.trip, cam);
+      }
+    });
+    // remove finished vehicles (triggers leaveCamera / next leg)
+    const done = cam.active.filter(v=>v.t>=1.18);
+    done.forEach(v=>leaveCamera(v.trip));
+  });
+
+  // resolve transits -> enter next camera
+  const now = Date.now();
+  state.transits = state.transits.filter(tr=>{
+    if(now>=tr.start+tr.duration){
+      enterCamera(tr.trip, tr.to);
+      return false;
+    }
+    return true;
+  });
+}
+
+/* ============================================================
+   CAMERA CANVAS RENDERING (perspective gantry view)
+   ============================================================ */
+const camCanvases = {}; // camId -> {canvas, ctx}
+
+function buildFeedGrid(){
+  const grid = document.getElementById('feed-grid');
+  grid.innerHTML = '';
+  CAMERAS.forEach(cam=>{
+    const card = document.createElement('div');
+    card.className = 'cam-card';
+    card.innerHTML = `
+      <canvas width="480" height="270"></canvas>
+      <div class="cam-meta">
+        <div>
+          <div class="n">${cam.id} · ${cam.name}</div>
+          <div class="z">${cam.zone} zone · ${cam.lanes} lanes</div>
+        </div>
+        <div class="stat"><span class="dot pulse" style="background:var(--green);box-shadow:0 0 6px var(--green);"></span>LIVE</div>
+      </div>`;
+    grid.appendChild(card);
+    const canvas = card.querySelector('canvas');
+    camCanvases[cam.id] = {canvas, ctx: canvas.getContext('2d')};
+  });
+}
+
+function roadEdges(t){
+  // returns left/right x of the road at perspective fraction t (0=horizon,1=near)
+  const left = lerp(0.40, -0.12, t);
+  const right = lerp(0.60, 1.12, t);
+  return [left,right];
+}
+
+function drawVehicle(ctx,w,h,cam,v){
+  const t = clamp(v.t,0,1.15);
+  const horizonY = h*HORIZON_T;
+  const y = lerp(horizonY, h*1.05, t);
+  const [le,re] = roadEdges(t);
+  const laneW = (re-le)/cam.lanes;
+  const cx = (le + laneW*(v.lane+0.5) + v.jitter*(t))*w;
+  const scale = lerp(0.16,1.05,t);
+  const bw = v.trip.type.w*scale, bh = v.trip.type.h*scale;
+
+  ctx.save();
+  ctx.translate(cx,y);
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.35)';
+  ctx.beginPath();ctx.ellipse(0,bh*0.42,bw*0.52,bh*0.22,0,0,Math.PI*2);ctx.fill();
+  // body
+  ctx.fillStyle = v.trip.color.hex;
+  roundRect(ctx,-bw/2,-bh/2,bw,bh,Math.min(6,bh*0.28));
+  ctx.fill();
+  // windshield band
+  ctx.fillStyle='rgba(10,14,20,.55)';
+  roundRect(ctx,-bw*0.32,-bh*0.42,bw*0.64,bh*0.34,Math.min(4,bh*0.15));
+  ctx.fill();
+  // lights
+  ctx.fillStyle = 'rgba(255,90,70,.9)';
+  ctx.fillRect(-bw/2, bh*0.28, bw*0.12, bh*0.14);
+  ctx.fillRect(bw/2-bw*0.12, bh*0.28, bw*0.12, bh*0.14);
+
+  if(v.detected){
+    const pad = 8+scale*10;
+    ctx.strokeStyle = WATCHLIST.has(v.trip.plate) ? '#ef5b4e' : '#3fd7c9';
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(-bw/2-pad, -bh/2-pad, bw+pad*2, bh+pad*2);
+    // corner ticks
+    const cs = 6;
+    ctx.beginPath();
+    const bx=-bw/2-pad, by=-bh/2-pad, ex=bw/2+pad, ey=bh/2+pad;
+    [[bx,by,1,1],[ex,by,-1,1],[bx,ey,1,-1],[ex,ey,-1,-1]].forEach(([px,py,dx,dy])=>{
+      ctx.moveTo(px,py+dy*cs); ctx.lineTo(px,py); ctx.lineTo(px+dx*cs,py);
+    });
+    ctx.stroke();
+
+    if(t<1.05){
+      ctx.font = `600 ${Math.max(9,10*scale)}px 'IBM Plex Mono', monospace`;
+      const label = v.trip.plate;
+      const tw = ctx.measureText(label).width;
+      const lx=-tw/2-4, ly=-bh/2-pad-16;
+      ctx.fillStyle = WATCHLIST.has(v.trip.plate) ? '#ef5b4e' : 'rgba(10,16,22,.85)';
+      ctx.fillRect(lx-2, ly-11, tw+12, 15);
+      ctx.fillStyle = WATCHLIST.has(v.trip.plate) ? '#fff' : '#3fd7c9';
+      ctx.fillText(label, lx+4, ly);
+    }
+  }
+  ctx.restore();
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function renderCamera(cam){
+  const c = camCanvases[cam.id]; if(!c) return;
+  const {ctx,canvas} = c;
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+
+  const horizonY = h*HORIZON_T;
+  // sky
+  const sky = ctx.createLinearGradient(0,0,0,horizonY);
+  sky.addColorStop(0,'#141d29'); sky.addColorStop(1,'#0d141d');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,w,horizonY);
+
+  // road
+  const [l0,r0] = roadEdges(0), [l1,r1] = roadEdges(1);
+  const road = ctx.createLinearGradient(0,horizonY,0,h);
+  road.addColorStop(0,'#20262f'); road.addColorStop(1,'#12161c');
+  ctx.fillStyle = road;
+  ctx.beginPath();
+  ctx.moveTo(l0*w,horizonY); ctx.lineTo(r0*w,horizonY);
+  ctx.lineTo(r1*w,h); ctx.lineTo(l1*w,h);
+  ctx.closePath(); ctx.fill();
+
+  // lane dividers
+  ctx.strokeStyle='rgba(230,236,242,.28)';
+  ctx.lineWidth=1.3;
+  for(let i=1;i<cam.lanes;i++){
+    ctx.beginPath();
+    const steps=14;
+    for(let s=0;s<=steps;s++){
+      const t=s/steps;
+      const [le,re]=roadEdges(t);
+      const x=(le+(re-le)*(i/cam.lanes))*w;
+      const y=lerp(horizonY,h,t);
+      if(s%2===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  // edges
+  ctx.strokeStyle='rgba(63,215,201,.18)';
+  ctx.beginPath(); ctx.moveTo(l0*w,horizonY); ctx.lineTo(l1*w,h); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(r0*w,horizonY); ctx.lineTo(r1*w,h); ctx.stroke();
+
+  // detection gate
+  const gateY = lerp(horizonY,h,DETECT_T);
+  const [gl,gr] = roadEdges(DETECT_T);
+  ctx.strokeStyle='rgba(63,215,201,.55)';
+  ctx.setLineDash([5,4]);
+  ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.moveTo(gl*w,gateY); ctx.lineTo(gr*w,gateY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font="600 9px 'IBM Plex Mono', monospace";
+  ctx.fillStyle='rgba(63,215,201,.8)';
+  ctx.fillText('ANPR ZONE', gr*w+6, gateY+3);
+
+  // vehicles, far to near
+  const list = cam.active.slice().sort((a,b)=>a.t-b.t);
+  list.forEach(v=>drawVehicle(ctx,w,h,cam,v));
+
+  // vignette
+  const vig = ctx.createRadialGradient(w/2,h/2,h*0.25,w/2,h/2,h*0.9);
+  vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,.35)');
+  ctx.fillStyle=vig; ctx.fillRect(0,0,w,h);
+
+  // scanlines
+  ctx.fillStyle='rgba(255,255,255,.015)';
+  for(let y=0;y<h;y+=3) ctx.fillRect(0,y,w,1);
+
+  // HUD
+  ctx.font="600 10px 'IBM Plex Mono', monospace";
+  ctx.fillStyle='rgba(232,238,245,.85)';
+  ctx.fillText(cam.id, 10, 16);
+  ctx.textAlign='right';
+  ctx.fillText('1920×1080 · 25FPS', w-10, 16);
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(232,238,245,.55)';
+  ctx.font="9px 'IBM Plex Mono', monospace";
+  ctx.fillText(fmtClock(), 10, h-9);
+  ctx.textAlign='right';
+  ctx.fillText(`${list.length} tracked`, w-10, h-9);
+  ctx.textAlign='left';
+
+  // live dot
+  if(Math.floor(Date.now()/650)%2===0){
+    ctx.fillStyle='#ef5b4e';
+    ctx.beginPath(); ctx.arc(w-84,12,3,0,Math.PI*2); ctx.fill();
+  }
+
+  // corner brackets
+  ctx.strokeStyle='rgba(232,238,245,.25)'; ctx.lineWidth=1.2;
+  const bl=12;
+  [[4,4,1,1],[w-4,4,-1,1],[4,h-4,1,-1],[w-4,h-4,-1,-1]].forEach(([px,py,dx,dy])=>{
+    ctx.beginPath(); ctx.moveTo(px,py+dy*bl); ctx.lineTo(px,py); ctx.lineTo(px+dx*bl,py); ctx.stroke();
+  });
+}
+
+/* ============================================================
+   MAP RENDERING
+   ============================================================ */
+const mapCanvas = document.getElementById('map-canvas');
+const mapCtx = mapCanvas.getContext('2d');
+
+function renderMap(){
+  const w = mapCanvas.width, h = mapCanvas.height;
+  mapCtx.clearRect(0,0,w,h);
+  mapCtx.fillStyle = '#0c121a';
+  mapCtx.fillRect(0,0,w,h);
+
+  // subtle grid
+  mapCtx.strokeStyle='rgba(255,255,255,.03)';
+  for(let x=0;x<w;x+=40){mapCtx.beginPath();mapCtx.moveTo(x,0);mapCtx.lineTo(x,h);mapCtx.stroke();}
+  for(let y=0;y<h;y+=40){mapCtx.beginPath();mapCtx.moveTo(0,y);mapCtx.lineTo(w,y);mapCtx.stroke();}
+
+  // roads
+  mapCtx.strokeStyle='#26333f';
+  mapCtx.lineWidth=6;
+  mapCtx.lineCap='round';
+  EDGES.forEach(([a,b])=>{
+    mapCtx.beginPath();
+    mapCtx.moveTo(CAMERAS[a].x, CAMERAS[a].y);
+    mapCtx.lineTo(CAMERAS[b].x, CAMERAS[b].y);
+    mapCtx.stroke();
+  });
+  mapCtx.strokeStyle='#1a232c';
+  mapCtx.lineWidth=1;
+  mapCtx.setLineDash([6,6]);
+  EDGES.forEach(([a,b])=>{
+    mapCtx.beginPath();
+    mapCtx.moveTo(CAMERAS[a].x, CAMERAS[a].y);
+    mapCtx.lineTo(CAMERAS[b].x, CAMERAS[b].y);
+    mapCtx.stroke();
+  });
+  mapCtx.setLineDash([]);
+
+  // transits (moving dots with trail)
+  const now = Date.now();
+  state.transits.forEach(tr=>{
+    const p = clamp((now-tr.start)/tr.duration,0,1);
+    const a = CAMERAS[tr.from], b = CAMERAS[tr.to];
+    const x = lerp(a.x,b.x,p), y = lerp(a.y,b.y,p);
+    // trail
+    const grad = mapCtx.createLinearGradient(a.x,a.y,x,y);
+    grad.addColorStop(0,'rgba(63,215,201,0)');
+    grad.addColorStop(1,'rgba(63,215,201,.7)');
+    mapCtx.strokeStyle=grad; mapCtx.lineWidth=2.2;
+    mapCtx.beginPath(); mapCtx.moveTo(a.x,a.y); mapCtx.lineTo(x,y); mapCtx.stroke();
+    // dot
+    mapCtx.fillStyle= tr.color;
+    mapCtx.beginPath(); mapCtx.arc(x,y,5,0,Math.PI*2); mapCtx.fill();
+    mapCtx.strokeStyle='#0c121a'; mapCtx.lineWidth=1.5; mapCtx.stroke();
+    // plate tag
+    mapCtx.font="600 10px 'IBM Plex Mono', monospace";
+    mapCtx.fillStyle='#cfe'; 
+    mapCtx.fillStyle='rgba(232,238,245,.85)';
+    mapCtx.fillText(tr.plate, x+8, y-8);
+  });
+
+  // camera nodes
+  CAMERAS.forEach(cam=>{
+    const last = state.cameraLastDetect[cam.id]||0;
+    const recent = now-last<900;
+    if(recent){
+      const p = (now-last)/900;
+      mapCtx.strokeStyle = `rgba(63,215,201,${1-p})`;
+      mapCtx.lineWidth = 2;
+      mapCtx.beginPath(); mapCtx.arc(cam.x,cam.y,10+p*18,0,Math.PI*2); mapCtx.stroke();
+    }
+    mapCtx.fillStyle = '#111823';
+    mapCtx.strokeStyle = recent? '#3fd7c9' : '#2a3947';
+    mapCtx.lineWidth=1.6;
+    mapCtx.beginPath(); mapCtx.arc(cam.x,cam.y,9,0,Math.PI*2); mapCtx.fill(); mapCtx.stroke();
+    mapCtx.fillStyle = recent? '#3fd7c9' : '#5b6a7c';
+    mapCtx.beginPath(); mapCtx.arc(cam.x,cam.y,3.4,0,Math.PI*2); mapCtx.fill();
+
+    mapCtx.font="600 11px 'IBM Plex Sans', sans-serif";
+    mapCtx.fillStyle='#e8eef5';
+    mapCtx.fillText(cam.id, cam.x+13, cam.y-9);
+    mapCtx.font="10px 'IBM Plex Sans', sans-serif";
+    mapCtx.fillStyle='#8b9bad';
+    mapCtx.fillText(cam.zone, cam.x+13, cam.y+5);
+  });
+
+  document.getElementById('map-active').textContent = state.transits.length+' vehicles in transit';
+}
+
+/* ============================================================
+   UI: ticker / log / alerts / routes
+   ============================================================ */
+function pushTickerRow(ev){
+  const wrap = document.getElementById('ticker');
+  const row = document.createElement('div');
+  row.className='tick-row';
+  row.innerHTML = `
+    <span class="plate ${ev.flag?'watch':''}">${ev.plate}</span>
+    <div class="meta">
+      <div class="l1">${ev.camera} · ${ev.zone}</div>
+      <div class="l2">${ev.time} · ${ev.type} · ${ev.color} · ${ev.confidence}%</div>
+    </div>`;
+  wrap.prepend(row);
+  while(wrap.children.length>40) wrap.removeChild(wrap.lastChild);
+}
+
+const logBody = document.getElementById('log-body');
+const allLogRows = [];
+function appendLogRow(ev){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="font-family:var(--mono);color:var(--text-faint2);">${ev.time}</td>
+    <td class="plate-cell"><span class="${ev.flag?'watch':''}">${ev.plate}</span></td>
+    <td>${ev.camera}</td>
+    <td>${ev.zone}</td>
+    <td>${ev.type}</td>
+    <td>${ev.color}</td>
+    <td style="font-family:var(--mono);">${ev.speed} km/h</td>
+    <td class="conf"><b>${ev.confidence}%</b></td>
+    <td class="${ev.flag?'flag-bad':'flag-ok'}">${ev.flag?'Watchlist':'—'}</td>`;
+  tr.dataset.plate = ev.plate.toLowerCase();
+  allLogRows.unshift(tr);
+  logBody.prepend(tr);
+  while(logBody.children.length>250) logBody.removeChild(logBody.lastChild);
+  document.getElementById('log-count').textContent = state.totals.detections+' records';
+}
+document.getElementById('log-search').addEventListener('input',e=>{
+  const q = e.target.value.trim().toLowerCase();
+  Array.from(logBody.children).forEach(tr=>{
+    tr.style.display = (!q || tr.dataset.plate.includes(q)) ? '' : 'none';
+  });
+});
+
+function pushAlert(a){
+  state.alerts.unshift(a);
+  if(state.alerts.length>60) state.alerts.pop();
+  renderAlerts();
+  renderSideAlerts();
+  const badge = document.getElementById('alert-badge');
+  badge.style.display='flex';
+  badge.textContent = state.alerts.length>99?'99+':state.alerts.length;
+  document.getElementById('alerts-count').textContent = state.alerts.length+' today';
+}
+function iconFor(kind){
+  if(kind==='Watchlist match'){
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z"/></svg>`;
+}
+function renderAlerts(){
+  const list = document.getElementById('alerts-list');
+  if(!state.alerts.length){ list.innerHTML='<div id="alerts-empty">No alerts yet — monitoring the network…</div>'; return; }
+  list.innerHTML = state.alerts.slice(0,60).map(a=>`
+    <div class="alert-card ${a.severity}">
+      <div class="ic">${iconFor(a.kind)}</div>
+      <div class="body">
+        <div class="row1"><span class="kind">${a.kind}</span><span class="plate">${a.plate}</span></div>
+        <div class="desc">${a.desc}</div>
+        <div class="meta">${a.time} · ${a.camera} · ${a.zone}</div>
+      </div>
+    </div>`).join('');
+}
+function renderSideAlerts(){
+  const wrap = document.getElementById('side-alerts');
+  if(!state.alerts.length){ wrap.innerHTML='<div style="color:var(--text-faint2);font-size:12px;">None yet</div>'; return; }
+  wrap.innerHTML = state.alerts.slice(0,4).map(a=>`
+    <div class="mini-alert">
+      <div class="sev ${a.severity==='crit'?'crit':'warn'}"></div>
+      <div class="t"><b>${a.plate}</b> — ${a.kind}<span>${a.camera} · ${a.time}</span></div>
+    </div>`).join('');
+}
+
+function renderRouteLog(){
+  const wrap = document.getElementById('route-items');
+  wrap.innerHTML = state.routesCompleted.map(r=>{
+    const path = r.route.map(i=>CAMERAS[i].id).join(' → ');
+    const secs = Math.round(r.durationMs/1000);
+    return `<div class="route-item">
+      <span class="p">${r.plate}</span>${r.watch?' <span style="color:var(--red);font-size:10px;font-family:var(--mono);">WATCHLIST</span>':''}
+      <div class="path">${path}</div>
+      <div class="dur">${r.route.length} cameras · ${secs}s span</div>
+    </div>`;
+  }).join('') || '<div style="color:var(--text-faint2);font-size:12px;">No completed routes yet</div>';
+}
+
+/* ============================================================
+   ANALYTICS
+   ============================================================ */
+let chartVolume, chartZones, chartTypes;
+function initCharts(){
+  if(typeof Chart==='undefined') return;
+  Chart.defaults.color = '#8b9bad';
+  Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+  Chart.defaults.font.size = 10.5;
+
+  chartVolume = new Chart(document.getElementById('chart-volume'), {
+    type:'line',
+    data:{ labels: state.intervalBuckets.map((_,i)=>i===state.intervalBuckets.length-1?'now':(-(state.intervalBuckets.length-1-i)*5)+'m'),
+      datasets:[{data: state.intervalBuckets, borderColor:'#3fd7c9', backgroundColor:'rgba(63,215,201,.12)', fill:true, tension:.35, pointRadius:0, borderWidth:2}]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{grid:{color:'rgba(255,255,255,.04)'}}, y:{grid:{color:'rgba(255,255,255,.04)'}, beginAtZero:true} } }
+  });
+  chartZones = new Chart(document.getElementById('chart-zones'), {
+    type:'bar',
+    data:{ labels: CAMERAS.map(c=>c.zone), datasets:[{data: CAMERAS.map(c=>state.zoneCounts[c.zone]), backgroundColor:'#f2a93b'}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{grid:{color:'rgba(255,255,255,.04)'}, beginAtZero:true}, y:{grid:{display:false}} } }
+  });
+  chartTypes = new Chart(document.getElementById('chart-types'), {
+    type:'doughnut',
+    data:{ labels: VEHICLE_TYPES.map(t=>t.name), datasets:[{data: VEHICLE_TYPES.map(t=>state.typeCounts[t.name]),
+      backgroundColor:['#3fd7c9','#f2a93b','#4ecb8d','#ef5b4e','#6f8cff','#c98bff']}]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:9, padding:10}}} }
+  });
+}
+function refreshAnalytics(){
+  document.getElementById('stat-total').textContent = state.totals.detections;
+  document.getElementById('stat-active').textContent = state.trips.length;
+  document.getElementById('stat-watch').textContent = state.totals.watchlist;
+  document.getElementById('stat-conf').textContent = state.totals.detections
+    ? (state.totals.confSum/state.totals.detections).toFixed(1)+'%' : '—';
+
+  if(!chartVolume) return;
+  chartVolume.data.datasets[0].data = state.intervalBuckets;
+  chartVolume.update('none');
+  chartZones.data.datasets[0].data = CAMERAS.map(c=>state.zoneCounts[c.zone]);
+  chartZones.update('none');
+  chartTypes.data.datasets[0].data = VEHICLE_TYPES.map(t=>state.typeCounts[t.name]);
+  chartTypes.update('none');
+}
+
+/* ============================================================
+   VIEW SWITCHING
+   ============================================================ */
+document.getElementById('nav').addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const v = btn.dataset.view;
+  document.querySelectorAll('.view').forEach(sec=>sec.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  if(v==='analytics') refreshAnalytics();
+});
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+let lastFrame = performance.now();
+let lastBucketRoll = Date.now();
+let lastSpawn = 0;
+
+function loop(now){
+  const dt = Math.min(0.05,(now-lastFrame)/1000);
+  lastFrame = now;
+
+  tickSim(dt);
+
+  // spawn new trips periodically
+  if(now-lastSpawn > rand(1400,2600)){
+    lastSpawn = now;
+    spawnTrip();
+  }
+
+  // roll a new interval bucket every 20s (compressed "5-minute" interval for demo pacing)
+  if(Date.now()-lastBucketRoll > 20000){
+    lastBucketRoll = Date.now();
+    state.intervalBuckets.push(0);
+    if(state.intervalBuckets.length>12) state.intervalBuckets.shift();
+  }
+
+  // render active view only (perf)
+  const activeView = document.querySelector('.view.active').id;
+  if(activeView==='view-feeds'){
+    CAMERAS.forEach(renderCamera);
+    let inFrame=0; CAMERAS.forEach(c=>inFrame+=c.active.length);
+    document.getElementById('feeds-count').textContent = inFrame+' vehicles in frame';
+  } else if(activeView==='view-map'){
+    renderMap();
+  }
+
+  document.getElementById('clock').textContent = fmtClock();
+  requestAnimationFrame(loop);
+}
+
+/* periodic UI refresh not tied to render loop */
+setInterval(()=>{
+  const activeView = document.querySelector('.view.active').id;
+  if(activeView==='view-analytics') refreshAnalytics();
+}, 1500);
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function boot(){
+  buildFeedGrid();
+  initCharts();
+  renderRouteLog();
+  renderAlerts();
+  renderSideAlerts();
+  document.getElementById('session-start').textContent = fmtClock();
+
+  // pre-seed a handful of trips so the network looks alive immediately
+  for(let i=0;i<6;i++) spawnTrip();
+
+  requestAnimationFrame(loop);
+
+  setTimeout(()=>{
+    document.getElementById('boot-status').textContent = 'CAMERA MESH ONLINE · 8/8 NODES';
+  }, 700);
+  setTimeout(()=>{
+    document.getElementById('boot').classList.add('hide');
+  }, 1500);
+}
+boot();
+
+})();
+</script>
+</body>
+</html>
